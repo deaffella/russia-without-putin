@@ -27,6 +27,8 @@ ap.add_argument("-l", "--le", required=True,
 	help="path to label encoder")
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
 	help="minimum probability to filter weak detections")
+ap.add_argument("-s", "--source", required=True,
+	help="path to video")
 args = vars(ap.parse_args())
 
 # load our serialized face detector from disk
@@ -47,7 +49,7 @@ le = pickle.loads(open(args["le"], "rb").read())
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
 # vs = VideoStream(src=0).start()
-vs = FileVideoStream(path="video/full/original_3.mp4").start()
+vs = FileVideoStream(path=args["source"]).start()
 time.sleep(2.0)
 
 # start the FPS throughput estimator
@@ -109,7 +111,7 @@ while True:
 			proba = preds[j]
 			name = le.classes_[j]
 
-			if(name == "putin" and proba >= 0.98):
+			if(name == "putin"):
 				# draw the bounding box of the face along with the
 				# associated probability
 				# text = "{}: {:.2f}%".format(name, proba * 100)
