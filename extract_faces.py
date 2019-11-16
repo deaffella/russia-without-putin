@@ -1,5 +1,5 @@
 # USAGE
-# python extract_embeddings.py -d dataset-small
+# python extract_faces.py -d dataset-small
 
 # import the necessary packages
 import argparse
@@ -14,23 +14,23 @@ from imutils import paths
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
 	help="path to input directory of faces + images")
-ap.add_argument("-e", "--embeddings", default="output/embeddings",
+ap.add_argument("-o", "--output", default="output/embeddings",
 	help="path to output serialized db of facial embeddings")
-ap.add_argument("-m", "--embedding-model", default="models/openface_nn4.small2.v1.t7",
+ap.add_argument("-m", "--model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
 args = vars(ap.parse_args())
 
 # load our serialized face embedding model from disk
 print("[INFO] loading face recognizer...")
-embedder = cv2.dnn.readNetFromTorch(args["embedding_model"])
+net = cv2.dnn.readNetFromTorch(args["model"])
 
 # grab the paths to the input images in our dataset
 print("[INFO] quantifying faces...")
 imagePaths = list(paths.list_images(args["dataset"]))
 
-# initialize our lists of extracted facial embeddings and
+# initialize our lists of extracted faces and
 # corresponding people names
-embeddings = []
+faces = []
 names = []
 
 # initialize the total number of faces processed
@@ -53,10 +53,10 @@ for (i, imagePath) in enumerate(imagePaths):
 		cv2.resize(image, (300, 300)), 1.0, (300, 300),
 		(104.0, 177.0, 123.0), swapRB=False, crop=False)
 
-	faces, confidences = cv.detect_face(image) 
+	results, confidences = cv.detect_face(image) 
 
-	for faceBounds in faces:
-		(startX, startY, endX, endY) = faceBounds
+	for bounds in results:
+		(startX, startY, endX, endY) = bounds
 
 		# extract the face ROI and grab the ROI dimensions
 		face = image[startY:endY, startX:endX]
@@ -66,18 +66,18 @@ for (i, imagePath) in enumerate(imagePaths):
 		# quantification of the face
 		faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
 			(96, 96), (0, 0, 0), swapRB=True, crop=False)
-		embedder.setInput(faceBlob)
-		vec = embedder.forward()
+		net.setInput(faceBlob)
+		vec = net.forward()
 
 		# add the name of the person + corresponding face
 		# embedding to their respective lists
-		embeddings.append(vec.flatten())
+		faces.append(vec.flatten())
 		names.append(name)
 		total += 1
 
-# dump the facial embeddings + names to disk
+# dump the facial faces + names to disk
 print("[INFO] serializing {} encodings...".format(total))
-data = {"embeddings": embeddings, "names": names}
-f = open(args["embeddings"], "wb")
+data = {"faces": faces, "names": names}
+f = open(args["output"], "wb")
 f.write(pickle.dumps(data))
 f.close()
