@@ -1,5 +1,5 @@
 # USAGE
-# python extract.py -d dataset-small
+# python extract_embeddings.py -d dataset-small
 
 # import the necessary packages
 import argparse
