@@ -1,26 +1,24 @@
 import cv2
+import cvlib as cv
+import argparse
 
-faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+ap = argparse.ArgumentParser()
+ap.add_argument("-s", "--source", required=True,
+    help="path to input video")
 
-video_capture = cv2.VideoCapture("video/full/original_6.mp4")
+args = vars(ap.parse_args())
+
+video_capture = cv2.VideoCapture(args['source'])
 
 while True:
     # Capture frame-by-frame
     ret, frame = video_capture.read()
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    faces = faceCascade.detectMultiScale(
-        gray,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(30, 30),
-        flags=cv2.CASCADE_SCALE_IMAGE
-    )
+    faces, confidences = cv.detect_face(frame) 
 
     # Draw a rectangle around the faces
-    for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    for (sx, sy, ex, ey) in faces:
+        cv2.rectangle(frame, (sx, sy), (ex, ey), (0, 255, 0), 2)
 
     # Display the resulting frame
     cv2.imshow('Video', frame)
