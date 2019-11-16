@@ -29,6 +29,8 @@ ap.add_argument("-c", "--confidence", type=float, default=0.5,
 	help="minimum probability to filter weak detections")
 ap.add_argument("-s", "--source", required=True,
 	help="path to video")
+ap.add_argument("-t", "--threshold", type=float, default=0.5,
+	help="threshold to filter weak predictions")
 args = vars(ap.parse_args())
 
 # load our serialized face detector from disk
@@ -60,6 +62,7 @@ sy = 0
 ex = 0
 ey = 0
 frameCount = 0
+frameLimit = 5
 
 # loop over frames from the video file stream
 while True:
@@ -73,7 +76,7 @@ while True:
 	# height = int(600 * as_ratio)
 	# frame = cv2.resize(frame, (600, height))
 
-	if frameCount % 5 == 0:
+	if frameCount % frameLimit == 0:
 		# resize the frame to have a width of 600 pixels (while
 		# maintaining the aspect ratio), and then grab the image
 		# dimensions
@@ -97,11 +100,11 @@ while True:
 		# the prediction
 		i = np.argmax(detections[0, 0, :, 2])
 		confidence = detections[0, 0, i, 2]
-
+		
+		found = False
 		# filter out weak detections
 		if confidence > args["confidence"]:
-			
-			found = False
+
 			# compute the (x, y)-coordinates of the bounding box for
 			# the face
 			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
@@ -129,20 +132,21 @@ while True:
 			proba = preds[j]
 			name = le.classes_[j]
 
-			if(name == "putin"):
-				# draw the bounding box of the face along with the
-				# associated probability
-				# text = "{}: {:.2f}%".format(name, proba * 100)
-				# y = startY - 10 if startY - 10 > 10 else startY + 10
-				# cv2.rectangle(frame, (startX, startY), (endX, endY),
-				# 	(0, 0, 255), 2)
-				# cv2.putText(frame, text, (startX, y),
-				# 	cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-				found = True
-				sx = startX
-				sy = startY
-				ex = endX
-				ey = endY
+			# if(name == "putin" and proba > args["threshold"]):
+			# if(name == "putin"):
+			# draw the bounding box of the face along with the
+			# associated probability
+			# text = "{}: {:.2f}%".format(name, proba * 100)
+			# y = startY - 10 if startY - 10 > 10 else startY + 10
+			# cv2.rectangle(frame, (startX, startY), (endX, endY),
+			# 	(0, 0, 255), 2)
+			# cv2.putText(frame, text, (startX, y),
+			# 	cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+			found = True
+			sx = startX
+			sy = startY
+			ex = endX
+			ey = endY
 
 		if(found == False):
 			sx = 0
