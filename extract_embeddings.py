@@ -16,7 +16,7 @@ ap.add_argument("-d", "--dataset", required=True,
 	help="path to input directory of faces + images")
 ap.add_argument("-e", "--embeddings", default="output/embeddings",
 	help="path to output serialized db of facial embeddings")
-ap.add_argument("-m", "--embedding-model", default="openface_nn4.small2.v1.t7",
+ap.add_argument("-m", "--embedding-model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
 args = vars(ap.parse_args())
 
