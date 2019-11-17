@@ -1,13 +1,11 @@
 # USAGE
-# python recognize_video.py --detector face_detection_model \
-#	--embedding-model openface_nn4.small2.v1.t7 \
-#	--recognizer output/recognizer.pickle \
-#	--le output/le.pickle
+# python main.py -i path/to/video.mp4 
 
 # import the necessary packages
 from imutils.video import FileVideoStream
 from imutils.video import FPS
 import numpy as np
+import cvlib as cv
 import argparse
 import imutils
 import pickle
@@ -17,52 +15,39 @@ import os
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--detector", required=True,
-	help="path to OpenCV's deep learning face detector")
-ap.add_argument("-m", "--embedding-model", required=True,
+ap.add_argument("-i", "--input", required=True,
+	help="path to video for processing")
+ap.add_argument("-l", "--frames_limit", default=5,
+	help="every n frame will be processed")
+ap.add_argument("-m", "--model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
-ap.add_argument("-r", "--recognizer", required=True,
+ap.add_argument("-r", "--recognizer", default="models/recognizer",
 	help="path to model trained to recognize faces")
-ap.add_argument("-l", "--le", required=True,
+ap.add_argument("-e", "--label_encoder", default="models/label_encoder",
 	help="path to label encoder")
-ap.add_argument("-c", "--confidence", type=float, default=0.5,
-	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--source", required=True,
-	help="path to video")
-ap.add_argument("-t", "--threshold", type=float, default=0.5,
-	help="threshold to filter weak predictions")
 args = vars(ap.parse_args())
-
-# load our serialized face detector from disk
-print("[INFO] loading face detector...")
-protoPath = os.path.sep.join([args["detector"], "deploy.prototxt"])
-modelPath = os.path.sep.join([args["detector"],
-	"res10_300x300_ssd_iter_140000.caffemodel"])
-detector = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
 
 # load our serialized face embedding model from disk
 print("[INFO] loading face recognizer...")
-embedder = cv2.dnn.readNetFromTorch(args["embedding_model"])
+net = cv2.dnn.readNetFromTorch(args["model"])
 
 # load the actual face recognition model along with the label encoder
 recognizer = pickle.loads(open(args["recognizer"], "rb").read())
-le = pickle.loads(open(args["le"], "rb").read())
+encoder = pickle.loads(open(args["label_encoder"], "rb").read())
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-# vs = VideoStream(src=0).start()
-vs = cv2.VideoCapture(args["source"])
-time.sleep(2.0)
+vs = cv2.VideoCapture(args["input"])
+print(vs.get(cv2.CAP_PROP_FPS))
 
 # start the FPS throughput estimator
 fps = FPS().start()
 
+frameCount = 0
 sx = 0
 sy = 0
 ex = 0
 ey = 0
-frameCount = 0
-frameLimit = 5
 
 # loop over frames from the video file stream
 while True:
@@ -76,77 +61,48 @@ while True:
 	# height = int(600 * as_ratio)
 	# frame = cv2.resize(frame, (600, height))
 
-	if frameCount % frameLimit == 0:
+	found = False
+
+	if frameCount % int(args["frames_limit"]) == 0:
 		# resize the frame to have a width of 600 pixels (while
 		# maintaining the aspect ratio), and then grab the image
 		# dimensions
 		# frame = cv2.resize(frame, width=600)
-		w =  vs.get(cv2.CAP_PROP_FRAME_WIDTH)
+		w = vs.get(cv2.CAP_PROP_FRAME_WIDTH)
 		h = vs.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-		frame2 = cv2.resize(frame, (300, 300))
+		results, confidences = cv.detect_face(frame) 
 
-		# construct a blob from the image
-		imageBlob = cv2.dnn.blobFromImage(
-			frame2, 1.0, (300, 300),
-			(104.0, 177.0, 123.0), swapRB=False, crop=False)
+		for bounds in results:
 
-		# apply OpenCV's deep learning-based face detector to localize
-		# faces in the input image
-		detector.setInput(imageBlob)
-		detections = detector.forward()
+			(startX, startY, endX, endY) = bounds
 
-		# extract the confidence (i.e., probability) associated with
-		# the prediction
-		i = np.argmax(detections[0, 0, :, 2])
-		confidence = detections[0, 0, i, 2]
-		
-		found = False
-		# filter out weak detections
-		if confidence > args["confidence"]:
-
-			# compute the (x, y)-coordinates of the bounding box for
-			# the face
-			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-			(startX, startY, endX, endY) = box.astype("int")
-
-			# extract the face ROI
+			# extract the face ROI and grab the ROI dimensions
 			face = frame[startY:endY, startX:endX]
-			(fH, fW) = face.shape[:2]
 
-			# ensure the face width and height are sufficiently large
-			if fW < 20 or fH < 20:
+			try:
+				# construct a blob for the face ROI, then pass the blob
+				# through our face embedding model to obtain the 128-d
+				# quantification of the face
+				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
+					(96, 96), (0, 0, 0), swapRB=True, crop=False)
+				net.setInput(faceBlob)
+				vec = net.forward()
+
+				# perform classification to recognize the face
+				preds = recognizer.predict_proba(vec)[0]
+				j = np.argmax(preds)
+				proba = preds[j]
+				name = encoder.classes_[j]
+
+				if name == "putin":
+					found = True
+					sx = startX
+					sy = startY
+					ex = endX
+					ey = endY
+			except:
 				continue
-
-			# construct a blob for the face ROI, then pass the blob
-			# through our face embedding model to obtain the 128-d
-			# quantification of the face
-			faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
-				(96, 96), (0, 0, 0), swapRB=True, crop=False)
-			embedder.setInput(faceBlob)
-			vec = embedder.forward()
-
-			# perform classification to recognize the face
-			preds = recognizer.predict_proba(vec)[0]
-			j = np.argmax(preds)
-			proba = preds[j]
-			name = le.classes_[j]
-
-			# if(name == "putin" and proba > args["threshold"]):
-			# if(name == "putin"):
-			# draw the bounding box of the face along with the
-			# associated probability
-			# text = "{}: {:.2f}%".format(name, proba * 100)
-			# y = startY - 10 if startY - 10 > 10 else startY + 10
-			# cv2.rectangle(frame, (startX, startY), (endX, endY),
-			# 	(0, 0, 255), 2)
-			# cv2.putText(frame, text, (startX, y),
-			# 	cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-			found = True
-			sx = startX
-			sy = startY
-			ex = endX
-			ey = endY
 
 		if(found == False):
 			sx = 0
@@ -154,7 +110,6 @@ while True:
 			ex = 0
 			ey = 0
 
-	print(sx, sy)
 	cv2.rectangle(frame, (sx, sy), (ex, ey), (0, 0, 0), -1)
 
 	# update the FPS counter
@@ -162,7 +117,7 @@ while True:
 
 	# show the output frame
 	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(25) & 0xFF
+	key = cv2.waitKey(1) & 0xFF
 
 	# if the `q` key was pressed, break from the loop
 	if key == ord("q"):
