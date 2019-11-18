@@ -1,8 +1,7 @@
 # USAGE
-# python main.py -i path/to/video.mp4 
+# python main.py -i path/to/video.mp4 -o path/to/output.mp4
 
 # import the necessary packages
-from imutils.video import FileVideoStream
 from imutils.video import FPS
 import numpy as np
 import cvlib as cv
@@ -12,13 +11,15 @@ import pickle
 import time
 import cv2
 import os
+import time
+
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required=True,
 	help="path to video for processing")
-ap.add_argument("-l", "--frames_limit", default=5,
-	help="every n frame will be processed")
+ap.add_argument("-o", "--output", required=True,
+	help="path to video for processing")
 ap.add_argument("-m", "--model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
 ap.add_argument("-r", "--recognizer", default="models/recognizer",
@@ -26,6 +27,8 @@ ap.add_argument("-r", "--recognizer", default="models/recognizer",
 ap.add_argument("-e", "--label_encoder", default="models/label_encoder",
 	help="path to label encoder")
 args = vars(ap.parse_args())
+
+os.makedirs(os.path.dirname(args["output"]), exist_ok=True)
 
 # load our serialized face embedding model from disk
 print("[INFO] loading face recognizer...")
@@ -37,89 +40,65 @@ encoder = pickle.loads(open(args["label_encoder"], "rb").read())
 
 # initialize the video stream, then allow the camera sensor to warm up
 print("[INFO] starting video stream...")
-vs = cv2.VideoCapture(args["input"])
-print(vs.get(cv2.CAP_PROP_FPS))
+video = cv2.VideoCapture(args["input"])
+fourcc = cv2.VideoWriter_fourcc(*'avc1')
+out_fps = video.get(5)
+out_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+out_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+out = cv2.VideoWriter(args["output"], fourcc, out_fps, (out_width,out_height))
 
 # start the FPS throughput estimator
 fps = FPS().start()
-
-frameCount = 0
-sx = 0
-sy = 0
-ex = 0
-ey = 0
 
 # loop over frames from the video file stream
 while True:
 
 	# grab the frame from the threaded video stream
-	ret, frame = vs.read()
-	
-	frameCount += 1
+	ret, frame = video.read()
 
-	# as_ratio = frame.shape[0] / frame.shape[1]
-	# height = int(600 * as_ratio)
-	# frame = cv2.resize(frame, (600, height))
+	if not ret:
+		print("End of video")
+		break
 
-	found = False
+	results, confidences = cv.detect_face(frame) 
 
-	if frameCount % int(args["frames_limit"]) == 0:
-		# resize the frame to have a width of 600 pixels (while
-		# maintaining the aspect ratio), and then grab the image
-		# dimensions
-		# frame = cv2.resize(frame, width=600)
-		w = vs.get(cv2.CAP_PROP_FRAME_WIDTH)
-		h = vs.get(cv2.CAP_PROP_FRAME_HEIGHT)
+	for bounds in results:
 
-		results, confidences = cv.detect_face(frame) 
+		(startX, startY, endX, endY) = bounds
 
-		for bounds in results:
+		# extract the face ROI and grab the ROI dimensions
+		face = frame[startY:endY, startX:endX]
 
-			(startX, startY, endX, endY) = bounds
+		try:
+			# construct a blob for the face ROI, then pass the blob
+			# through our face embedding model to obtain the 128-d
+			# quantification of the face
+			faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
+				(96, 96), (0, 0, 0), swapRB=True, crop=False)
+			net.setInput(faceBlob)
+			vec = net.forward()
 
-			# extract the face ROI and grab the ROI dimensions
-			face = frame[startY:endY, startX:endX]
+			# perform classification to recognize the face
+			preds = recognizer.predict_proba(vec)[0]
+			j = np.argmax(preds)
+			proba = preds[j]
+			name = encoder.classes_[j]
 
-			try:
-				# construct a blob for the face ROI, then pass the blob
-				# through our face embedding model to obtain the 128-d
-				# quantification of the face
-				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
-					(96, 96), (0, 0, 0), swapRB=True, crop=False)
-				net.setInput(faceBlob)
-				vec = net.forward()
-
-				# perform classification to recognize the face
-				preds = recognizer.predict_proba(vec)[0]
-				j = np.argmax(preds)
-				proba = preds[j]
-				name = encoder.classes_[j]
-
-				if name == "putin":
-					found = True
-					sx = startX
-					sy = startY
-					ex = endX
-					ey = endY
-			except:
-				continue
-
-		if(found == False):
-			sx = 0
-			sy = 0
-			ex = 0
-			ey = 0
-
-	cv2.rectangle(frame, (sx, sy), (ex, ey), (0, 0, 0), -1)
+			if name == "putin":
+				cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 0, 0), -1)
+		except:
+			continue
 
 	# update the FPS counter
 	fps.update()
 
 	# show the output frame
 	cv2.imshow("Frame", frame)
-	key = cv2.waitKey(1) & 0xFF
 
-	# if the `q` key was pressed, break from the loop
+	# write frame to disk
+	out.write(frame)
+
+	key = cv2.waitKey(1) & 0xFF
 	if key == ord("q"):
 		break
 
@@ -129,5 +108,6 @@ print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
 print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
 # do a bit of cleanup
-vs.release()
+video.release()
+out.release()
 cv2.destroyAllWindows()

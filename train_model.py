@@ -1,5 +1,5 @@
 # USAGE
-# python extract_faces.py -d dataset
+# python train_model.py -d dataset
 
 # import the necessary packages
 import argparse
@@ -7,7 +7,6 @@ import imutils
 import pickle
 import cv2
 import os
-import cvlib as cv
 from imutils import paths
 
 from sklearn.preprocessing import LabelEncoder
@@ -16,7 +15,7 @@ from sklearn.svm import SVC
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", required=True,
-	help="path to input directory of faces + images")
+	help="path to input directory of face images")
 ap.add_argument("-m", "--model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
 ap.add_argument("-r", "--recognizer", default="models/recognizer",
@@ -26,10 +25,10 @@ ap.add_argument("-l", "--label_encoder", default="models/label_encoder",
 args = vars(ap.parse_args())
 
 def main():
-	data = extract_faces()
+	data = extract_data()
 	create_model(data)
 
-def extract_faces():
+def extract_data():
 	# load our serialized face embedding model from disk
 	print("[INFO] loading face recognizer...")
 	net = cv2.dnn.readNetFromTorch(args["model"])
@@ -56,32 +55,24 @@ def extract_faces():
 		# load the image, resize it to have a width of 600 pixels (while
 		# maintaining the aspect ratio), and then grab the image
 		# dimensions
-		image = cv2.imread(imagePath)
+		face = cv2.imread(imagePath)
 
-		results, confidences = cv.detect_face(image) 
+		try:
+			# construct a blob for the face ROI, then pass the blob
+			# through our face embedding model to obtain the 128-d
+			# quantification of the face
+			faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
+				(96, 96), (0, 0, 0), swapRB=True, crop=False)
+			net.setInput(faceBlob)
+			vec = net.forward()
 
-		for bounds in results:
-			(startX, startY, endX, endY) = bounds
-
-			# extract the face ROI and grab the ROI dimensions
-			face = image[startY:endY, startX:endX]
-
-			try:
-				# construct a blob for the face ROI, then pass the blob
-				# through our face embedding model to obtain the 128-d
-				# quantification of the face
-				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,
-					(96, 96), (0, 0, 0), swapRB=True, crop=False)
-				net.setInput(faceBlob)
-				vec = net.forward()
-
-				# add the name of the person + corresponding face
-				# embedding to their respective lists
-				faces.append(vec.flatten())
-				names.append(name)
-				total += 1
-			except:
-				continue
+			# add the name of the person + corresponding face
+			# embedding to their respective lists
+			faces.append(vec.flatten())
+			names.append(name)
+			total += 1
+		except:
+			continue
 
 	# dump the facial faces + names to disk
 	print("[INFO] serializing {} encodings...".format(total))
@@ -95,7 +86,7 @@ def create_model(data):
 
 	# train the model used to accept the 128-d embeddings of the face and
 	# then produce the actual face recognition
-	print("[INFO] training model...")
+	print("[INFO] creating model...")
 	recognizer = SVC(C=1.0, kernel="linear", probability=True)
 	recognizer.fit(data["faces"], labels)
 
