@@ -18,7 +18,7 @@ import time
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required=True,
 	help="path to video for processing")
-ap.add_argument("-o", "--output", required=True,
+ap.add_argument("-o", "--output",
 	help="path to video for processing")
 ap.add_argument("-m", "--model", default="models/openface_nn4.small2.v1.t7",
 	help="path to OpenCV's deep learning face embedding model")
@@ -28,7 +28,8 @@ ap.add_argument("-e", "--label_encoder", default="models/label_encoder",
 	help="path to label encoder")
 args = vars(ap.parse_args())
 
-os.makedirs(os.path.dirname(args["output"]), exist_ok=True)
+if args["output"]:
+	os.makedirs(os.path.dirname(args["output"]), exist_ok=True)
 
 # load our serialized face embedding model from disk
 print("[INFO] loading face recognizer...")
@@ -38,14 +39,16 @@ net = cv2.dnn.readNetFromTorch(args["model"])
 recognizer = pickle.loads(open(args["recognizer"], "rb").read())
 encoder = pickle.loads(open(args["label_encoder"], "rb").read())
 
-# initialize the video stream, then allow the camera sensor to warm up
+# initialize the video stream
 print("[INFO] starting video stream...")
 video = cv2.VideoCapture(args["input"])
-fourcc = cv2.VideoWriter_fourcc(*'avc1')
-out_fps = video.get(5)
-out_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
-out_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-out = cv2.VideoWriter(args["output"], fourcc, out_fps, (out_width,out_height))
+
+if args["output"]:
+	fourcc = cv2.VideoWriter_fourcc(*'avc1')
+	out_fps = video.get(5)
+	out_width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+	out_height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+	out = cv2.VideoWriter(args["output"], fourcc, out_fps, (out_width,out_height))
 
 # start the FPS throughput estimator
 fps = FPS().start()
@@ -95,8 +98,9 @@ while True:
 	# show the output frame
 	cv2.imshow("Frame", frame)
 
-	# write frame to disk
-	out.write(frame)
+	if args["output"]:
+		# write frame to disk
+		out.write(frame)
 
 	key = cv2.waitKey(1) & 0xFF
 	if key == ord("q"):
@@ -108,6 +112,7 @@ print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
 print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
 # do a bit of cleanup
+if args["output"]:
+	out.release()
 video.release()
-out.release()
 cv2.destroyAllWindows()
