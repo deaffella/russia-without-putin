@@ -45,7 +45,7 @@ python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8 --output 
 Вместо прямой трансляции в скрипт можно так же передать и обычное видео:
 
 ```sh
-python main.py --input path/to/some_video.mp4 --output path/to/output.mp4
+python main.py --input examples/video.mp4 --output path/to/output.mp4
 ```
 
 Прервать запись, как и обработку можно нажатием клавиши 'q'.
@@ -76,6 +76,8 @@ dataset/
 
 - добавить распознавание текста
 - добавить распознавание звука
+- ускорить обработку отдельного кадра
+- увеличить точность распознавания
 - уменьшить количество "false positive" результатов
 - запустить ретрансляцию обработанного видео
 
