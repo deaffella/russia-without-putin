@@ -45,7 +45,7 @@ python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8 --output 
 Вместо прямой трансляции в скрипт так же можно передать обычное видео:
 
 ```sh
-python main.py --input examples/video.mp4 --output path/to/output.mp4
+python main.py --input test/video.mp4 --output path/to/output.mp4
 ```
 
 Прервать запись, как и обработку можно нажатием клавиши `q`.
