@@ -1,8 +1,8 @@
 # Россия без Путина
 
-<!-- illustration1.png -->
+![Russia without Putin illustration](.readme/illustration1.png)
 
-Главная цель проекта создать алгоритм позволяющий с высокой точностью распознавать лицо конкретного человека на видео в реальном времени и при необхоимости скрывать его.
+Главная цель проекта - создать алгоритм позволяющий с высокой точностью распознавать лицо конкретного человека на видео в реальном времени и при необхоимости скрывать его.
 
 ## Установка
 
@@ -22,11 +22,11 @@ cd russia-without-putin
 pip install -r requirements.txt
 ```
 
-Вот и всё, установка закончена!
+Всё, установка закончена!
 
 ## Запуск
 
-Чтобы запустить обработку видео трансляции необходимо в скрипт `main.py` через атрибут `--input`  передать лишь ссылку на неё:
+Чтобы запустить обработку видео трансляции достаточно в скрипт `main.py` через атрибут `--input`  передать ссылку на неё:
 
 ```sh
 python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8
@@ -34,7 +34,7 @@ python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8
 
 После чего трансляция автоматически откроется в новом окне:
 
-<!-- screenshot1.png -->
+![Russia without Putin in action](.readme/screenshot1.png)
 
 Чтобы сохранить результат обработки у себя на компьютере к вызову скрипта необходимо добавить атрибут `--output` с путем до конечного файла:
 
@@ -42,15 +42,22 @@ python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8
 python main.py --input http://uiptv.do.am/1ufc/000000006/playlist.m3u8 --output path/to/output.mp4
 ```
 
-Вместо прямой трансляции в скрипт можно так же передать и обычное видео:
+Вместо прямой трансляции в скрипт так же можно передать обычное видео:
 
 ```sh
 python main.py --input examples/video.mp4 --output path/to/output.mp4
 ```
 
-Прервать запись, как и обработку можно нажатием клавиши 'q'.
+Прервать запись, как и обработку можно нажатием клавиши `q`.
 
 ## Принцип работы алгоритма
+
+Работу всего алгоритма можно разбить на 4 главных этапа:
+
+- [Сбор данных]() 
+- [Создание "обучение" модели]() 
+- [Поиск лица на видео]() 
+- [Распознавание лица]() 
 
 ### Сбор данных
 
@@ -58,11 +65,11 @@ python main.py --input examples/video.mp4 --output path/to/output.mp4
 
 В данном случае для получения большого числа примеров лица Путина в проекте использовались видеозаписи его выступлений, из которых с помощью стороннего скрипта [freearhey/face-extractor](https://github.com/freearhey/face-extractor) автоматически было извлечено 12,308 фото.
 
-![Putin face dataset](.readme/illustration2.png)
+![Putin face dataset](.readme/screenshot2.png)
 
 В качестве "негативных" примеров использовался [freearhey/face-dataset](https://github.com/freearhey/face-dataset) состоящий из более чем 14,000 фото лиц различных людей. В данной коллекции так же присутствуют фотографии Путина, но перед обработкой они были перенесены в папку с "позитивыными" примерами, в результате чего общее количество "негативных" примеров составило 14,902 фото.
 
-![Non-putin face dataset](.readme/illustration3.png)
+![Non-putin face dataset](.readme/screenshot3.png)
 
 В итоге была создана следующая структура данных:
 
@@ -74,37 +81,35 @@ dataset/
 
 ### Создание "обучение" модели
 
-Первым этапом было создание 128-мерныго вектора для каждого лица (так же называемого "embeddings"). Сделано это было с помощью [Deep Neural Network модуля OpenCV](https://docs.opencv.org/master/d2/d58/tutorial_table_of_content_dnn.html) и Torch модели проекта [OpenFace](https://cmusatyalab.github.io/openface/) - [nn4.small2.v1.t7](https://storage.cmusatyalab.org/openface-models/nn4.small2.v1.t7). После чего, полученные вектора были сконвертированы в 1-мерные с использованием метода [numpy.ndarray.flatten](https://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.flatten.html) и уже в таком виде использовались далее для тренировки модели.
+Первым этапом является создание 128-мерныго вектора для каждого лица (так же называемого "embeddings"). Это делается с помощью [Deep Neural Network модуля OpenCV](https://docs.opencv.org/master/d2/d58/tutorial_table_of_content_dnn.html) и Torch модели проекта [OpenFace](https://cmusatyalab.github.io/openface/) - [nn4.small2.v1.t7](https://storage.cmusatyalab.org/openface-models/nn4.small2.v1.t7). После чего, полученные вектора конвертируются в 1-мерные с использованием метода [numpy.ndarray.flatten](https://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.flatten.html) и уже в таком виде используются далее для тренировки модели.
 
-Далее само "обучение" модели, которая бы математически описывала как именно выглядит Путин, а как другие люди, проходило с использованием алгоритма [Support Vector Machines (SVM)](https://scikit-learn.org/stable/modules/svm.html#support-vector-machines) из библиотеки [scikit-learn](https://scikit-learn.org/stable/). Он как раз позволил автоматически разбить полученные тысячи векторов на две группы: `'putin'` и `'non-putin'`. Ну а полученный  итоге объект был затем сконвертирован в байты с помощью метода [pickle.dumps](https://docs.python.org/3/library/pickle.html#pickle.dumps) и сохранён в файл `models/recognizer`.
+Далее происхоит само "обучение" модели, которая бы математически описывала как именно выглядит Путин, а как другие люди. Для этого в данном случае используется алгоритм [Support Vector Machines (SVM)](https://scikit-learn.org/stable/modules/svm.html#support-vector-machines) из библиотеки [scikit-learn](https://scikit-learn.org/stable/). Он позволяет автоматически разбить полученные тысячи векторов на две группы: `'putin'` и `'non-putin'`. Полученный в итоге объект затем конвертируется в байты с помощью метода [pickle.dumps](https://docs.python.org/3/library/pickle.html#pickle.dumps) и сохраняется в файл `models/recognizer`.
 
-Одновременно с этим в отдельный файл `models/label_encoder` были сохранены подписи (лейблы) для каждого вектора, чтобы впоследствии было легче определить чьё именно лицо этот вектор описывает. Перед сохранением все лейблы так же были закодировны с помощью класса [LabelEncoder](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.LabelEncoder.html) из той же библиотеки [scikit-learn](https://scikit-learn.org/stable/).
+Одновременно с этим в отдельный файл `models/label_encoder` сохраняются подписи (лейблы) для каждого вектора, чтобы впоследствии можно было определить чьё именно лицо этот вектор описывает. Перед сохранением все лейблы так же кодируются с помощью класса [LabelEncoder](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.LabelEncoder.html) из той же библиотеки [scikit-learn](https://scikit-learn.org/stable/).
 
-Запускается весь выше описанный процесс через скрипт `train_model`, в качестве аргумента в который передается лишь путь до папки с "позитивными" и "негативными" примерами:
+Запускается весь выше описанный процесс через скрипт `train_model`, в качестве аргумента в который передается путь до исходной папки с "позитивными" и "негативными" примерами:
 
 ```sh
 python train_model.py --dataset path/to/dataset
 ```
 
-### Поиск лиц на видео
+### Поиск лица на видео
 
-Перед тем как начать наконец распознавать лица, нам необходимо сначала найти эти самые лица на видео. Для этого каждое видео проходит через OpenCV класс [VideoCapture](https://docs.opencv.org/2.4/modules/highgui/doc/reading_and_writing_images_and_video.html#videocapture), который позволяет разбить его на отдельные кадры. И уже каждый такой кадр мы пропускаем через библиотеку [cvlib](https://github.com/arunponnusamy/cvlib). В результате чего на выходе мы получаем координаты всех найденных в кадре лиц. 
+На данном этапе в обработчик загружается видео в котором будет проиходить поиск нужного лица, в данном случае это прямая трансляция канала "Россия 24". Загружается видео посредствам OpenCV класса [VideoCapture](https://docs.opencv.org/2.4/modules/highgui/doc/reading_and_writing_images_and_video.html#videocapture), после чего с его же помощью видеопоток разбивается на отдельные кадры.
 
-Под капотом данная библиотека использует уже знакомый вам OpenCV модуль `dnn`, но в этот раз с заранее натренированной Coffe моделью - `res10_300x300_ssd_iter_140000`. И да, эта же библиотека использовался для извлечения фотографий лица Путина и создания коллекции [freearhey/face-dataset](https://github.com/freearhey/face-dataset).
+Затем каждый кадр видео проходит через библиотеку [cvlib](https://github.com/arunponnusamy/cvlib), которая определяет расположение всех лиц в кадре и возвращает их координаты.
 
-### Распознавание найденных лиц
+Под капотом данная библиотека так же использует [Deep Neural Network модуля OpenCV](https://docs.opencv.org/master/d2/d58/tutorial_table_of_content_dnn.html), но уже с заранее натренированной Coffe моделью - `res10_300x300_ssd_iter_140000`.
 
-Ну и теперь имея не только модель описывающую как лицо Путина, так и лица других людей, а так же определив где в кадре находится неизестное нам лицо мы можем начать их сравнивать.
+### Распознавание лица
 
-Для этого мы вновь создаем 128-мерный вектор, но в этот раз для нашего неизвестного лица. Делается это так же с помощью Torch модели, что и в процессе "обучения" - [nn4.small2.v1.t7](https://storage.cmusatyalab.org/openface-models/nn4.small2.v1.t7).
+Для этого этапа сначала необходимо загрузить обратно созданный нами ранее `models/recognizer`. Это делается с помощью метода [pickle.loads](https://docs.python.org/3/library/pickle.html#pickle.loads).
 
-Далее уже полученный вектор на необходимо пропустить через созданный нами ранее `models/recognizer`. Чтобы загрузить его обратно мы используем в данном случае метод [pickle.loads](https://docs.python.org/3/library/pickle.html#pickle.loads). Уже после чего передаем вектор в метод [predict_proba()](https://scikit-learn.org/stable/modules/generated/sklearn.svm.libsvm.predict_proba.html) нашей модели.
+Затем каждое полученное на предыдущем этапе изображение лица проходит через тот же процесс создания 128-мерного вектора, что и примеры на этапе создания модели. После чего полученный вектор передается в метод [predict_proba()](https://scikit-learn.org/stable/modules/generated/sklearn.svm.libsvm.predict_proba.html) нашей модели `recognizer`.
 
-На выходе каждый раз мы должны получать массив содержащий, в данном случае, два числа. Первое - вероятность от 0 до 1 что найденное лицо в кадре не принадлежит Путину, а второе - что принадлежит.
+На выходе мы получаем каждый раз массив содержащий, в данном случае, два числа. Первое - вероятность от 0 до 1 что найденное лицо в кадре не принадлежит Путину, а второе - что принадлежит. Из них выбирается наибольшее значение и с помощью созданного ранее `models/label_encoder` определяется подходящий для этого лейбл.
 
-На же в итоге остается лишь выбрать из этих чисел большее и подсмотреть в `models/label_encoder` какой это должен быть лейбл.
-
-Ну вот, в принципе, и всё. Далее кадр просто выводится на экран и, если лицо принадлежит Путину, на его месте рисуется черный прямоугольник.
+Завершающий этап, вставка черного прямоугольника по координатам распознанного лица и его вывод вместе с исходным кадром на экран, с помощью `OpenCV` метода `imshow`.
 
 ## В планах
 
@@ -117,7 +122,7 @@ python train_model.py --dataset path/to/dataset
 
 ## Как помочь?
 
-Если вы нашли какую-то ошибку или у вас есть идея как можно улучшить данный алгоритм, можете написать об этом [сюда](https://github.com/freearhey/russia-without-putin/issues).
+Если вы нашли какую-то ошибку или у вас есть идея как можно улучшить данный алгоритм, лучше всего написать об этом [сюда](https://github.com/freearhey/russia-without-putin/issues).
 
 ## Лицензия
 
